@@ -51,6 +51,7 @@ This allows an external script, desktop shortcut, or layout-switching hook to te
 │   ├── dvorak-start.sh          # daemon launcher with retry, cleanup, and PID files
 │   ├── dvorak-usb.service       # systemd template service for dvorak-start.sh
 │   ├── sway_layout_switch_example.sh  # example Sway layout switcher with signal integration
+│   ├── kde_layout_switch_example.sh   # example KDE layout switcher with signal integration
 │   └── kde_layout_watcher.sh          # KDE layout watcher with signal integration
 ├── LICENSE
 ├── Makefile
@@ -218,6 +219,21 @@ chmod +x ~/.config/autostart-scripts/kde_layout_watcher.sh
 ```
 
 By default, the base layout is `us`. To use another base layout, set `BASE_LAYOUT` in the script or in the autostart entry environment (for example `BASE_LAYOUT=gb`).
+
+If you prefer switching layouts from a keybinding (instead of only watching changes), use `examples/kde_layout_switch_example.sh`:
+
+```bash
+cp examples/kde_layout_switch_example.sh ~/.local/bin/kde_layout_switch.sh
+chmod +x ~/.local/bin/kde_layout_switch.sh
+```
+
+Then bind it in KDE Shortcuts to either cycle or switch directly:
+
+```bash
+~/.local/bin/kde_layout_switch.sh
+~/.local/bin/kde_layout_switch.sh us
+~/.local/bin/kde_layout_switch.sh dvorak
+```
 
 ## Run
 

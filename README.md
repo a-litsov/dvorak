@@ -1,14 +1,14 @@
-# Dvorak <> Qwerty - Keyboard remapping for Linux when pressing L-CTRL, R-CTRL, L-ALT, L-WIN, CAPSLOCK
+# Dvorak <> Qwerty - Qwerty base layout with Dvorak typing on Linux
 
-Since I type with the "Dvorak" keyboard layout, the shortcuts such as ctrl-c, ctrl-x, or ctrl-v are not comfortable anymore for using the left hand only.
+This setup is for users who keep the OS layout as Qwerty, but want normal typing to behave like Dvorak.
 
-Furthermore, many applications have their default shortcuts, which I'm used to. So for these shortcuts I prefer "Qwerty". Since there is no way to configure this, this program intercepts these keys and remaps them from "Dvorak" to "Qwerty" when pressing L-CTRL, R-CTRL, L-ALT, L-WIN, CAPSLOCK, or any of those combinations. CAPSLOCK is also used as a modifier, but can be disabled with the "-c" flag.
+Many applications have their default shortcuts, which assume Qwerty (Ctrl+C, Ctrl+X, Ctrl+V, editor hotkeys, and so on). Since there is no way to configure this at the /dev/input layer, this program intercepts key events and remaps normal typing from Qwerty to Dvorak. When pressing L-CTRL, R-CTRL, L-ALT, L-WIN, CAPSLOCK, or any of those combinations, keys are forwarded unchanged so shortcuts work as native Qwerty. CAPSLOCK is also used as a modifier, but can be disabled with the `-c` flag.
 
 With X11 I was relying on the [xdq](https://github.com/kentonv/dvorak-qwerty) from Kenton Varda. However, this does not work reliably with Wayland.
 
-## Keyboard remapping with dvorak that works reliably with Wayland - make ctrl-c ctrl-c again (and not ctrl-i)
+## Keyboard remapping with dvorak that works reliably with Wayland
 
-X11's XGrabKey() works partially with some application but not with others (e.g., gedit is not working). Since XGrabKey() is an X11 function with some support in Wayland, I was looking for a more stable solution. After a quick look to this [repo](https://github.com/kentonv/dvorak-qwerty), I saw that Kenton added a systemtap script to implement the mapping. It scared me a bit to follow the systemtap path, so I implemented an other solution based on /dev/uinput. The idea is to read /dev/input, grab keys with EVIOCGRAB, create a virtual device that can emit the keys and pass the keys from /dev/input to /dev/uinput. If L-CTRL, R-CTRL, L-ALT, L-WIN, CAPSLOCK is pressed it will map the keys back to "Qwerty".
+X11's XGrabKey() works partially with some application but not with others (e.g., gedit is not working). Since XGrabKey() is an X11 function with some support in Wayland, I was looking for a more stable solution. After a quick look to this [repo](https://github.com/kentonv/dvorak-qwerty), I saw that Kenton added a systemtap script to implement the mapping. It scared me a bit to follow the systemtap path, so I implemented an other solution based on /dev/uinput. The idea is to read /dev/input, grab keys with EVIOCGRAB, create a virtual device that can emit the keys and pass the keys from /dev/input to /dev/uinput. In normal typing it remaps Qwerty to Dvorak; with shortcut modifiers pressed, it stays in Qwerty passthrough.
 
 This program is tested with Arch and Ubuntu, and Kenton Varda reported that it also works with Chrome OS.
 
@@ -26,12 +26,12 @@ Because `dvorak` works at the `/dev/input` level — grabbing raw events with `E
 
 The `dvorak` program now supports two Unix signals to externally control whether remapping is active:
 
-| Signal    | Effect                                                          |
-|-----------|-----------------------------------------------------------------|
-| `SIGUSR1` | **On** — enable Dvorak-to-Qwerty remapping (original behavior) |
-| `SIGUSR2` | **Off** — passthrough mode (no remapping; all keys forwarded as-is) |
+| Signal    | Effect |
+|-----------|--------|
+| `SIGUSR1` | **On** — enable Qwerty-to-Dvorak typing remapping (shortcuts still passthrough as Qwerty) |
+| `SIGUSR2` | **Off** — full passthrough mode (no remapping; all keys forwarded as-is) |
 
-This allows an external script, desktop shortcut, or layout-switching hook to tell all running `dvorak` daemons to disable remapping when the OS layout is not Dvorak, and re-enable it when switching back.
+This allows an external script, desktop shortcut, or layout-switching hook to tell all running `dvorak` daemons to disable remapping when the OS layout is not Qwerty, and re-enable it when switching back.
 
 **Thread safety:** if a signal arrives while a modifier-based shortcut is in progress (e.g., the user is holding Ctrl+C), the mode change is deferred until all modifier and remapped keys are released. This prevents key events from being split across two different mapping states, which would result in stuck or phantom keys.
 
@@ -50,7 +50,8 @@ This allows an external script, desktop shortcut, or layout-switching hook to te
 │   ├── dvorak-signal.sh         # send on/off signals to all dvorak daemons
 │   ├── dvorak-start.sh          # daemon launcher with retry, cleanup, and PID files
 │   ├── dvorak-usb.service       # systemd template service for dvorak-start.sh
-│   └── sway_layout_switch_example.sh  # example Sway layout switcher with signal integration
+│   ├── sway_layout_switch_example.sh  # example Sway layout switcher with signal integration
+│   └── kde_layout_watcher.sh          # KDE layout watcher with signal integration
 ├── LICENSE
 ├── Makefile
 └── README.md
@@ -160,15 +161,15 @@ journalctl -u "dvorak-usb@Logitech K750.service" -f
 
 ```bash
 # From a terminal — should auto-elevate via sudo and succeed:
-dvorak-signal.sh off    # all daemons -> passthrough
-dvorak-signal.sh on     # all daemons -> Dvorak remapping enabled
+dvorak-signal.sh off    # all daemons -> full passthrough
+dvorak-signal.sh on     # all daemons -> Qwerty-to-Dvorak typing remap enabled
 ```
 
 #### Step 7 (optional): Integrate with your desktop layout switcher
 
 An example Sway layout switching script is provided at `examples/sway_layout_switch_example.sh`. It switches the Sway keyboard layout and automatically signals all `dvorak` daemons:
 
-* Switching to Dvorak (index 0) sends `dvorak-signal.sh on`
+* Switching to Qwerty (index 0 in your Sway config, if used as base) sends `dvorak-signal.sh on`
 * Switching to any other layout sends `dvorak-signal.sh off`
 
 To use it with Sway, copy it to your scripts directory and bind it to a key:
@@ -193,6 +194,31 @@ bindsym $mod+F4 exec ~/.config/sway/scripts/layout_switch.sh ru
 
 Adapt the layout names and indices in the script to match your Sway input configuration.
 
+### KDE Plasma integration (Plasma 5/6)
+
+If you use KDE Plasma and switch layouts via the KDE keyboard applet, use `examples/kde_layout_watcher.sh`.
+
+Behavior:
+
+* Base QWERTY layout (default `us`) sends `dvorak-signal.sh on`
+* Any other layout sends `dvorak-signal.sh off`
+
+The watcher supports Plasma 5/6 with this strategy:
+
+1. Try `qdbus6`
+2. Fall back to `qdbus`
+3. Listen for DBus layout signals; if that is not available, fall back to polling
+
+Install and run it from KDE autostart scripts:
+
+```bash
+mkdir -p ~/.config/autostart-scripts
+cp examples/kde_layout_watcher.sh ~/.config/autostart-scripts/
+chmod +x ~/.config/autostart-scripts/kde_layout_watcher.sh
+```
+
+By default, the base layout is `us`. To use another base layout, set `BASE_LAYOUT` in the script or in the autostart entry environment (for example `BASE_LAYOUT=gb`).
+
 ## Run
 
 Most likely, you will need to use sudo as it needs access to input devices. The following parameters can be used:
@@ -207,18 +233,18 @@ usage: dvorak [OPTION]
   -p FILE                   Write PID to FILE (useful for daemon mode).
 
 Signals:
-  SIGUSR1                   Enable Dvorak mapping (on).
-  SIGUSR2                   Disable mapping / passthrough (off).
+  SIGUSR1                   Enable Qwerty-to-Dvorak typing remap (on).
+  SIGUSR2                   Disable mapping / full passthrough (off).
 
 example: dvorak -d /dev/input/by-id/usb-Logitech_USB_Receiver-if02-event-kbd -m "k750 k350"
 ```
 
 Once installed via `make install` or systemd services, the mapping will be applied whenever a keyboard is attached.
 
-If you have more mappings, e.g., a Dvorak mapping and a non-Dvorak mapping, you can disable the mapping so the shortcuts are not remapped. There are two ways:
+If you switch between multiple OS layouts, disable remapping when Qwerty is not the active base layout. There are two ways:
 
-1. **Signal-based (recommended):** use `dvorak-signal.sh off` to switch all daemons to passthrough, and `dvorak-signal.sh on` to re-enable. Once controlled by signals, the keyboard toggle is suppressed — only another signal can change the mode.
-2. **Keyboard toggle:** press **3 times L-ALT** to toggle the Dvorak-to-Qwerty remapping on or off. This only works when the mode has not been set by a signal. Can be disabled with the `-t` flag.
+1. **Signal-based (recommended):** use `dvorak-signal.sh off` to switch all daemons to full passthrough, and `dvorak-signal.sh on` to re-enable Qwerty-to-Dvorak typing remap. Once controlled by signals, the keyboard toggle is suppressed — only another signal can change the mode.
+2. **Keyboard toggle:** press **3 times L-ALT** to toggle remapping on or off. When remapping is on, normal typing is Qwerty-to-Dvorak and shortcuts stay Qwerty. This only works when the mode has not been set by a signal. Can be disabled with the `-t` flag.
 
 ## Not a matching device: [xyz]
 
